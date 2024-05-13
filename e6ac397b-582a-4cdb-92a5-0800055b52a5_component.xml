@@ -1,0 +1,393 @@
+<chunk name="Object" index="0">
+  <items count="3">
+    <item name="GUID" type_name="gh_guid" type_code="9">410755b1-224a-4c1e-a407-bf32fb45ea7e</item>
+    <item name="Lib" type_name="gh_guid" type_code="9">00000000-0000-0000-0000-000000000000</item>
+    <item name="Name" type_name="gh_string" type_code="10">HB Adiabatic by Type</item>
+  </items>
+  <chunks count="1">
+    <chunk name="Container">
+      <items count="13">
+        <item name="CodeInput" type_name="gh_string" type_code="10"># Honeybee: A Plugin for Environmental Analysis (GPL)
+# This file is part of Honeybee.
+#
+# Copyright (c) 2024, Ladybug Tools.
+# You should have received a copy of the GNU Affero General Public License
+# along with Honeybee; If not, see &lt;http://www.gnu.org/licenses/&gt;.
+# 
+# @license AGPL-3.0-or-later &lt;https://spdx.org/licenses/AGPL-3.0-or-later&gt;
+
+
+"""
+Make boundary conditions of Rooms or Faces adiabatic by face type.
+-
+
+    Args:
+        _hb_objs: Honeybee Faces or Rooms to which adiabatic boundary conditions
+            will be assigned.
+        exterior_walls_: If True, all exterior walls of the input Rooms or Faces
+            will be set to adiabatic. This can also be a list of boolean values
+            and different adiabatic values will be assigned based on the cardinal 
+            direction, starting with north and moving clockwise.
+        roofs_: If True, all exterior roofs of the input Rooms or Faces will be
+            set to adiabatic.
+        exposed_floors_: If True, all exposed floors of the input Rooms or Faces
+            will be set to adiabatic.
+        interior_walls_: If True, all interior walls of the input Rooms or Faces
+            will be set to adiabatic.
+        interior_floors_: If True, all interior floors and ceilings of the input
+            Rooms or Faces will be set to adiabatic.
+    
+    Returns:
+        hb_objs: The input honeybee objects with their boundary conditions edited.
+"""
+
+ghenv.Component.Name = "HB Adiabatic by Type"
+ghenv.Component.NickName = 'AdiabaticByType'
+ghenv.Component.Message = '1.8.0'
+ghenv.Component.Category = 'HB-Energy'
+ghenv.Component.SubCategory = '0 :: Basic Properties'
+ghenv.Component.AdditionalHelpFromDocStrings = "5"
+
+
+try:  # import the core honeybee dependencies
+    from honeybee.boundarycondition import Outdoors, Ground, Surface, boundary_conditions
+    from honeybee.facetype import Wall, RoofCeiling, Floor
+    from honeybee.room import Room
+    from honeybee.face import Face
+    from honeybee.orientation import angles_from_num_orient, face_orient_index
+except ImportError as e:
+    raise ImportError('\nFailed to import honeybee:\n\t{}'.format(e))
+
+try:
+    from ladybug_rhino.grasshopper import all_required_inputs
+except ImportError as e:
+    raise ImportError('\nFailed to import ladybug_rhino:\n\t{}'.format(e))
+
+
+def check_type(face, boundary_c, face_type):
+    """Check whether a given Face is of a certain type."""
+    return isinstance(face.boundary_condition, boundary_c) and \
+        isinstance(face.type, face_type)
+
+
+def check_and_assign_adiabatic_to_face(face):
+    """Check if a face if of a relevant type and assign Adiabatic if so."""
+    
+    # assign the adiabatic property to roofs
+    if roofs_ and check_type(face, (Outdoors, Ground), RoofCeiling):
+        face.boundary_condition = boundary_conditions.adiabatic
+    
+    # assign the adiabatic property to exposed floors
+    if exposed_floors_ and check_type(face, (Outdoors, Ground), Floor):
+        face.boundary_condition = boundary_conditions.adiabatic
+    
+    # assign the adiabatic property to exposed floors
+    if interior_walls_ and check_type(face, Surface, Wall):
+        face.boundary_condition = boundary_conditions.adiabatic
+    
+    # assign the adiabatic property to exposed floors
+    if interior_floors_ and check_type(face, Surface, (RoofCeiling, Floor)):
+        face.boundary_condition = boundary_conditions.adiabatic
+
+
+if all_required_inputs(ghenv.Component):
+    # duplicate the initial objects
+    hb_objs = [obj.duplicate() for obj in _hb_objs]
+    
+    # assign the adiabatic property to the walls
+    if len(exterior_walls_) &gt; 0:
+        angles = angles_from_num_orient(len(exterior_walls_))
+        for obj in hb_objs:
+            if isinstance(obj, Room):
+                for face in obj.faces:
+                    if check_type(face, (Outdoors, Ground), Wall):
+                        orient_i = face_orient_index(face, angles)
+                        if orient_i is not None and exterior_walls_[orient_i]:
+                            face.boundary_condition = boundary_conditions.adiabatic
+            else:  # assume it is a Face
+                if check_type(obj, (Outdoors, Ground), Wall):
+                    orient_i = face_orient_index(obj, angles)
+                    if orient_i is not None and exterior_walls_[orient_i]:
+                        obj.boundary_condition = boundary_conditions.adiabatic
+    
+    # assign the adiabatic property to all of the other face types
+    for obj in hb_objs:
+        if isinstance(obj, Room):
+            for face in obj.faces:
+                check_and_assign_adiabatic_to_face(face)
+        else:  # assume it is a Face
+            check_and_assign_adiabatic_to_face(obj)
+</item>
+        <item name="Description" type_name="gh_string" type_code="10">Make boundary conditions of Rooms or Faces adiabatic by face type.
+-</item>
+        <item name="EditorLocation" type_name="gh_drawing_point" type_code="30">
+          <X>403</X>
+          <Y>42</Y>
+        </item>
+        <item name="EditorSize" type_name="gh_drawing_size" type_code="32">
+          <W>1537</W>
+          <H>1801</H>
+        </item>
+        <item name="HideInput" type_name="gh_bool" type_code="1">true</item>
+        <item name="HideOutput" type_name="gh_bool" type_code="1">true</item>
+        <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
+          <bitmap length="603">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAOvwAADr8BOAVTJAAAAf1JREFUSEtjGGwgj4mJIQLKpiqQAuI9DXEa/49nt/0Hsg8DsSZIglLACsTlXV5en8+kT/9/Lnva/7OZM/6fSZv5P93BBGRRM1gVmSCcj4/j2/Hs9v/nc6aBDcWG3eTlfwPV5kO0EAdMJIXYDhzJagAbcDYd4mJ8eFdGyX8+DqYrQL2yECOwAz0gXl/h6QDWBAoOdINwYZgjViQmg4JtPxBbgAxEB9MWxMb8v1wxCcMAYvGlksn/N6ZlgyyZBzESCfBysZQezmnEqpEUfCq797+cOGcL1FgUMG1FUgpWTaTgA9k1/7lYmadAzUQB00FhiE0TKXh7RhH2IAKCzs1peVg1kYJ3ZpaALJgLMRIJ8HKwlIK8h00TKRiUb6SE2VuhxqIAqgTRTmCeAJqF6QMgoG0cMDMzNu7KLMWqiRR8KLvuPw8H82SosQjAysjQvT+3+v/lSsoy2qmcnv8yguwToMaigAxuDpZvh7Pq4SUmKRhUXJzM6vovwscGCqJiiJHYQW6Fm+PrM0AN+EpRGIapARXpQL2gHMwINoUA4AHi9dVejhBD8qaiGAoWgxo8IcQf5GJQAccP0kgqMFIR516/M70Yw4LDwOJcXYrvIFCNI0QpZSBOWoTj0+msCf/PZEz7Lykp9AsolguRoh4QVhDjbJcU4pgOZEtDhAYcMDAAAMNiD4xIc8CPAAAAAElFTkSuQmCC</bitmap>
+        </item>
+        <item name="InputIsPath" type_name="gh_bool" type_code="1">false</item>
+        <item name="InstanceGuid" type_name="gh_guid" type_code="9">e6ac397b-582a-4cdb-92a5-0800055b52a5</item>
+        <item name="IsAdvancedMode" type_name="gh_bool" type_code="1">false</item>
+        <item name="MarshalOutGuids" type_name="gh_bool" type_code="1">true</item>
+        <item name="Name" type_name="gh_string" type_code="10">HB Adiabatic by Type</item>
+        <item name="NickName" type_name="gh_string" type_code="10">AdiabaticByType</item>
+      </items>
+      <chunks count="2">
+        <chunk name="Attributes">
+          <items count="2">
+            <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+              <X>148</X>
+              <Y>196</Y>
+              <W>193</W>
+              <H>124</H>
+            </item>
+            <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+              <X>274</X>
+              <Y>258</Y>
+            </item>
+          </items>
+        </chunk>
+        <chunk name="ParameterData">
+          <items count="9">
+            <item name="InputCount" type_name="gh_int32" type_code="3">6</item>
+            <item name="InputId" index="0" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="1" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="2" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="3" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="4" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="5" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="OutputCount" type_name="gh_int32" type_code="3">1</item>
+            <item name="OutputId" index="0" type_name="gh_guid" type_code="9">8ec86459-bf01-4409-baee-174d0d2b13d0</item>
+          </items>
+          <chunks count="7">
+            <chunk name="InputParam" index="0">
+              <items count="12">
+                <item name="Access" type_name="gh_int32" type_code="3">1</item>
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">Honeybee Faces or Rooms to which adiabatic boundary conditions
+will be assigned.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">584f6844-c2e1-4392-9dfd-cf87d29829bc</item>
+                <item name="Mapping" type_name="gh_int32" type_code="3">1</item>
+                <item name="Name" type_name="gh_string" type_code="10">_hb_objs</item>
+                <item name="NickName" type_name="gh_string" type_code="10">_hb_objs</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">1</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">35915213-5534-4277-81b8-1bdc9e7383d2</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>148</X>
+                      <Y>198</Y>
+                      <W>111</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>214</X>
+                      <Y>208</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="1">
+              <items count="11">
+                <item name="Access" type_name="gh_int32" type_code="3">1</item>
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">If True, all exterior walls of the input Rooms or Faces
+will be set to adiabatic. This can also be a list of boolean values
+and different adiabatic values will be assigned based on the cardinal
+direction, starting with north and moving clockwise.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">3ba902ab-1702-4086-aa59-5bcea72152e2</item>
+                <item name="Name" type_name="gh_string" type_code="10">exterior_walls_</item>
+                <item name="NickName" type_name="gh_string" type_code="10">exterior_walls_</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">1</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">d60527f5-b5af-4ef6-8970-5f96fe412559</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>148</X>
+                      <Y>218</Y>
+                      <W>111</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>214</X>
+                      <Y>228</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="2">
+              <items count="10">
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">If True, all exterior roofs of the input Rooms or Faces will be
+set to adiabatic.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">f03ba352-d9be-4477-afd4-f9300bd53dcd</item>
+                <item name="Name" type_name="gh_string" type_code="10">roofs_</item>
+                <item name="NickName" type_name="gh_string" type_code="10">roofs_</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">0</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">d60527f5-b5af-4ef6-8970-5f96fe412559</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>148</X>
+                      <Y>238</Y>
+                      <W>111</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>214</X>
+                      <Y>248</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="3">
+              <items count="10">
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">If True, all exposed floors of the input Rooms or Faces
+will be set to adiabatic.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">acbbfb66-5ea8-45bb-ac18-4addde69a874</item>
+                <item name="Name" type_name="gh_string" type_code="10">exposed_floors_</item>
+                <item name="NickName" type_name="gh_string" type_code="10">exposed_floors_</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">0</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">d60527f5-b5af-4ef6-8970-5f96fe412559</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>148</X>
+                      <Y>258</Y>
+                      <W>111</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>214</X>
+                      <Y>268</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="4">
+              <items count="10">
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">If True, all interior walls of the input Rooms or Faces
+will be set to adiabatic.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">db248d18-5d77-4463-b122-15266207a0bb</item>
+                <item name="Name" type_name="gh_string" type_code="10">interior_walls_</item>
+                <item name="NickName" type_name="gh_string" type_code="10">interior_walls_</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">0</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">d60527f5-b5af-4ef6-8970-5f96fe412559</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>148</X>
+                      <Y>278</Y>
+                      <W>111</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>214</X>
+                      <Y>288</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="5">
+              <items count="10">
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">If True, all interior floors and ceilings of the input
+Rooms or Faces will be set to adiabatic.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">fe03f5d3-edc1-49f6-957f-9ab9011f38e2</item>
+                <item name="Name" type_name="gh_string" type_code="10">interior_floors_</item>
+                <item name="NickName" type_name="gh_string" type_code="10">interior_floors_</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">0</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">d60527f5-b5af-4ef6-8970-5f96fe412559</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>148</X>
+                      <Y>298</Y>
+                      <W>111</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>214</X>
+                      <Y>308</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="OutputParam" index="0">
+              <items count="6">
+                <item name="Description" type_name="gh_string" type_code="10">The input honeybee objects with their boundary conditions edited.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">cc3bbbe1-5834-4a2d-aad3-b7d30f00690c</item>
+                <item name="Name" type_name="gh_string" type_code="10">hb_objs</item>
+                <item name="NickName" type_name="gh_string" type_code="10">hb_objs</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">false</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>289</X>
+                      <Y>198</Y>
+                      <W>52</W>
+                      <H>120</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>314</X>
+                      <Y>258</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+          </chunks>
+        </chunk>
+      </chunks>
+    </chunk>
+  </chunks>
+</chunk>

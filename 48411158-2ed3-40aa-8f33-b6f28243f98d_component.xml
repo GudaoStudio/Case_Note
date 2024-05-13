@@ -1,0 +1,353 @@
+<chunk name="Object" index="0">
+  <items count="3">
+    <item name="GUID" type_name="gh_guid" type_code="9">410755b1-224a-4c1e-a407-bf32fb45ea7e</item>
+    <item name="Lib" type_name="gh_guid" type_code="9">00000000-0000-0000-0000-000000000000</item>
+    <item name="Name" type_name="gh_string" type_code="10">HB Constant Schedule</item>
+  </items>
+  <chunks count="1">
+    <chunk name="Container">
+      <items count="13">
+        <item name="CodeInput" type_name="gh_string" type_code="10"># Honeybee: A Plugin for Environmental Analysis (GPL)
+# This file is part of Honeybee.
+#
+# Copyright (c) 2024, Ladybug Tools.
+# You should have received a copy of the GNU Affero General Public License
+# along with Honeybee; If not, see &lt;http://www.gnu.org/licenses/&gt;.
+# 
+# @license AGPL-3.0-or-later &lt;https://spdx.org/licenses/AGPL-3.0-or-later&gt;
+
+
+"""
+Create a schedule from a single constant value or a list of 24 hourly values
+repeating continuously over every day of the year.
+-
+
+    Args:
+        _values: A list of 24 values that represent the schedule values at each
+            hour of the day. This can also be a single constant value for the
+            whole day.
+        _name_: Text to set the name for the Schedule and to be incorporated
+            into a unique Schedule identifier.
+        _type_limit_: A text string from the identifier of the ScheduleTypeLimit to
+            be looked up in the schedule type limit library. This can also be a
+            custom ScheduleTypeLimit object from the "HB Type Limit" component.
+            The input here will be used to validate schedule values against
+            upper/lower limits and assign units to the schedule values. Default:
+            "Fractional" for values that range continuously between 0 and 1.
+            Choose from the following built-in options:
+                * Fractional
+                * On-Off
+                * Temperature
+                * Activity Level
+                * Power
+                * Humidity
+                * Angle
+                * Delta Temperature
+                * Control Level
+
+    Returns:
+        report: Reports, errors, warnings, etc.
+        schedule: A ScheduleRuleset object that can be assigned to a Room, a Load
+            object, or a ProgramType object.
+        idf_text: Text strings for the EnergyPlus Schedule that will ultimately
+            be written into the IDF for simulation. This can also be used to add
+            the schedule to the schedule library that is loaded up upon the start
+            of Honeybee by copying this text into the honeybee/library/schedules/
+            user_library.idf file.
+"""
+
+ghenv.Component.Name = 'HB Constant Schedule'
+ghenv.Component.NickName = 'ConstantSchedule'
+ghenv.Component.Message = '1.8.0'
+ghenv.Component.Category = 'HB-Energy'
+ghenv.Component.SubCategory = '2 :: Schedules'
+ghenv.Component.AdditionalHelpFromDocStrings = '4'
+
+try:  # import the core honeybee dependencies
+    from honeybee.typing import clean_and_id_ep_string, clean_ep_string
+except ImportError as e:
+    raise ImportError('\nFailed to import honeybee:\n\t{}'.format(e))
+
+try:  # import the honeybee-energy dependencies
+    from honeybee_energy.schedule.ruleset import ScheduleRuleset
+    from honeybee_energy.lib.scheduletypelimits import schedule_type_limit_by_identifier
+except ImportError as e:
+    raise ImportError('\nFailed to import honeybee_energy:\n\t{}'.format(e))
+
+try:  # import ladybug_rhino dependencies
+    from ladybug_rhino.grasshopper import all_required_inputs
+except ImportError as e:
+    raise ImportError('\nFailed to import ladybug_rhino:\n\t{}'.format(e))
+
+
+if all_required_inputs(ghenv.Component):
+    # get the ScheduleTypeLimit object
+    if _type_limit_ is None:
+        _type_limit_ = schedule_type_limit_by_identifier('Fractional')
+    elif isinstance(_type_limit_, str):
+        _type_limit_ = schedule_type_limit_by_identifier(_type_limit_)
+
+    # create the schedule object
+    name = clean_and_id_ep_string('ConstantSchedule') if _name_ is None else \
+        clean_ep_string(_name_)
+    if len(_values) == 1:
+        schedule = ScheduleRuleset.from_constant_value(name, _values[0], _type_limit_)
+        idf_text, constant_none = schedule.to_idf()
+    else:
+        schedule = ScheduleRuleset.from_daily_values(name, _values, timestep=1,
+            schedule_type_limit=_type_limit_)
+        idf_year, idf_week = schedule.to_idf()
+        idf_days = [day_sch.to_idf(_type_limit_) for day_sch in schedule.day_schedules]
+        idf_text = [idf_year] + idf_week + idf_days if idf_week is not None \
+            else idf_year
+    if _name_ is not None:
+        schedule.display_name = _name_
+</item>
+        <item name="Description" type_name="gh_string" type_code="10">Create a schedule from a single constant value or a list of 24 hourly values
+repeating continuously over every day of the year.
+-</item>
+        <item name="EditorLocation" type_name="gh_drawing_point" type_code="30">
+          <X>-874</X>
+          <Y>168</Y>
+        </item>
+        <item name="EditorSize" type_name="gh_drawing_size" type_code="32">
+          <W>716</W>
+          <H>1083</H>
+        </item>
+        <item name="HideInput" type_name="gh_bool" type_code="1">true</item>
+        <item name="HideOutput" type_name="gh_bool" type_code="1">false</item>
+        <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
+          <bitmap length="1169">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAOwAAADsABataJCQAABDNJREFUSEvFlX9MW1UUxx+LQEeAaV1ZKm2VtSWgYJNm4Uc0MSjBiIEFgc0E6jJGxnQIQZLp0IUs6l/TqckS8Ee2GAhhZCYigRATREM0BFpqf27OscIovL5igUJpX1l9x3Nqg2BbpzHRb/JJzj0/eu69795b5n/TdxMT54aHh0cFQZBGXDEFAA8MocbGxt5DOyHivrdaWlq4oqIiwAbPR1wxhfHikpISqKur4yOue2qvRqMpaGxsZPPz82FwcPB19BXEo7e393RhYSFUVVV5y8vLS9AnQ+KqErktk8mgvl4Hubm5UFtbC+iLS0VFBWi1Wqiurga1Wk0+H/IBErVdOUgIAYlEAu3t7XD06Is0s6gf3UlZWRnodDpobW0FhUKxM3YG2aVOZDuhtLQUmpubITU1dWdRFCKRCJqamsIrSUhI2Bm7gexaxUVkZ8K/ZQ5JRLZFDe4izr9gAaHC28hPyE3kDkIxssnnQNaRqAafIJS0NwYiJKwGhkm72NEh7ff5NH2zs48fO3z4fqlUmtLbezV/dHRU093TQ/eGTh412dXgU+T672a0eLmqIqTI/tqfqXJ5leoVTnc86BgfDzoEIRcv2H02+w0Px3FBvBevYLoO2UCiGtCHiZI7U9UGD+cAL1PDLw+pppYPqlkQyyCoKYC5EyeeuAIgsl+/CcGtEPj8/BtY8hLy9xpwcpXSpcgW/GKF28Mwj5FvZmZG4juY07OxT8yvpGecC/vM5nKn01UZCAhZOGxFYjawkWGxWK+y7uUJ/crK6dXElAbYLwfXqeblqbW1zyhucDiK5y1W/ezQyPrP/V9oR0ZGkk0ma//SkvvLTZ6vwJSTSMwGFjImJ+1B3FcweDxXvEzyeUjPAO/lz2FmwemnOP7YMUpw+fxguDV/SK/Xp8zfcVIJ+PktWlHcb2Anw2y2vs1x7q5pjqtZS5W8DwcegcWzHZOGhcXzFDdNT2sdHNdt8W50fy8IGQMDA0lGo/nDRZbr2ggEnsaUl5H4DXCGNU6WbTCsrR1a2S9thUwVcM8899UUz79A8QkAxdKl7vYQk9TpFWcWdgLsMZpt9SzLHV9f5x/FlFeRmA2sZFgsNh8tVz831ycwTIZLLN2CoqfAfG1omeJGp/MItJ0BeFAOq2mSd04CJN6adYS3CE/Rm5gS8xRdRsxkmEw2I8uyqyaLtYvGC5VVfSDPhoAiG9wy1Q8eeZYTJApYytPetV+4kDeOx/RHk8W5hDWbga1TWELfYBPZ1eAS4iIDJ5KC7MNLkxwZJ4WUeUdC0qxv/HKlh89UOvgDWR8LTS1qipMwNw1JjwzfRWgFe8KjiJ5E6JF6C6HngUQJ1GQ78SOxOL3mjzgpCQlPBEWvZzFCzz5teZTOItTkV4SW+Gfoz8SL0DsTKx5AqP5bJA2JKbqttI+vIW3/AMqnG/ws8l+JYX4DOGldPGyvNgUAAAAASUVORK5CYII=</bitmap>
+        </item>
+        <item name="InputIsPath" type_name="gh_bool" type_code="1">false</item>
+        <item name="InstanceGuid" type_name="gh_guid" type_code="9">48411158-2ed3-40aa-8f33-b6f28243f98d</item>
+        <item name="IsAdvancedMode" type_name="gh_bool" type_code="1">false</item>
+        <item name="MarshalOutGuids" type_name="gh_bool" type_code="1">true</item>
+        <item name="Name" type_name="gh_string" type_code="10">HB Constant Schedule</item>
+        <item name="NickName" type_name="gh_string" type_code="10">ConstantSchedule</item>
+      </items>
+      <chunks count="2">
+        <chunk name="Attributes">
+          <items count="2">
+            <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+              <X>608</X>
+              <Y>196</Y>
+              <W>162</W>
+              <H>64</H>
+            </item>
+            <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+              <X>695</X>
+              <Y>228</Y>
+            </item>
+          </items>
+        </chunk>
+        <chunk name="ParameterData">
+          <items count="8">
+            <item name="InputCount" type_name="gh_int32" type_code="3">3</item>
+            <item name="InputId" index="0" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="1" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="2" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="OutputCount" type_name="gh_int32" type_code="3">3</item>
+            <item name="OutputId" index="0" type_name="gh_guid" type_code="9">3ede854e-c753-40eb-84cb-b48008f14fd4</item>
+            <item name="OutputId" index="1" type_name="gh_guid" type_code="9">8ec86459-bf01-4409-baee-174d0d2b13d0</item>
+            <item name="OutputId" index="2" type_name="gh_guid" type_code="9">8ec86459-bf01-4409-baee-174d0d2b13d0</item>
+          </items>
+          <chunks count="6">
+            <chunk name="InputParam" index="0">
+              <items count="11">
+                <item name="Access" type_name="gh_int32" type_code="3">1</item>
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">A list of 24 values that represent the schedule values at each
+hour of the day. This can also be a single constant value for the
+whole day.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">cdc2a321-ba1f-4524-8782-8fa96534da1e</item>
+                <item name="Name" type_name="gh_string" type_code="10">_values</item>
+                <item name="NickName" type_name="gh_string" type_code="10">_values</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">1</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">39fbc626-7a01-46ab-a18e-ec1c0c41685b</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>608</X>
+                      <Y>198</Y>
+                      <W>72</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>646.5</X>
+                      <Y>208</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="1">
+              <items count="10">
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">Text to set the name for the Schedule and to be incorporated
+into a unique Schedule identifier.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">c7b8084b-a0ce-4cb6-adc1-655383770c49</item>
+                <item name="Name" type_name="gh_string" type_code="10">_name_</item>
+                <item name="NickName" type_name="gh_string" type_code="10">_name_</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">0</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">37261734-eec7-4f50-b6a8-b8d1f3c4396b</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>608</X>
+                      <Y>218</Y>
+                      <W>72</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>646.5</X>
+                      <Y>228</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="2">
+              <items count="10">
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">A text string from the identifier of the ScheduleTypeLimit to
+be looked up in the schedule type limit library. This can also be a
+custom ScheduleTypeLimit object from the "HB Type Limit" component.
+The input here will be used to validate schedule values against
+upper/lower limits and assign units to the schedule values. Default:
+"Fractional" for values that range continuously between 0 and 1.
+Choose from the following built-in options:
+* Fractional
+* On-Off
+* Temperature
+* Activity Level
+* Power
+* Humidity
+* Angle
+* Delta Temperature
+* Control Level</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">b374bb31-b2de-4d62-8f99-12dbb8310523</item>
+                <item name="Name" type_name="gh_string" type_code="10">_type_limit_</item>
+                <item name="NickName" type_name="gh_string" type_code="10">_type_limit_</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">0</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">35915213-5534-4277-81b8-1bdc9e7383d2</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>608</X>
+                      <Y>238</Y>
+                      <W>72</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>646.5</X>
+                      <Y>248</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="OutputParam" index="0">
+              <items count="6">
+                <item name="Description" type_name="gh_string" type_code="10">Reports, errors, warnings, etc.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">09c091e2-6047-4adf-9121-84378191fad9</item>
+                <item name="Name" type_name="gh_string" type_code="10">out</item>
+                <item name="NickName" type_name="gh_string" type_code="10">out</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">false</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>710</X>
+                      <Y>198</Y>
+                      <W>60</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>739</X>
+                      <Y>208</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="OutputParam" index="1">
+              <items count="6">
+                <item name="Description" type_name="gh_string" type_code="10">A ScheduleRuleset object that can be assigned to a Room, a Load
+object, or a ProgramType object.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">fd70ae00-0a5e-434b-a307-66c79d373b4f</item>
+                <item name="Name" type_name="gh_string" type_code="10">schedule</item>
+                <item name="NickName" type_name="gh_string" type_code="10">schedule</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">false</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>710</X>
+                      <Y>218</Y>
+                      <W>60</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>739</X>
+                      <Y>228</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="OutputParam" index="2">
+              <items count="6">
+                <item name="Description" type_name="gh_string" type_code="10">Text strings for the EnergyPlus Schedule that will ultimately
+be written into the IDF for simulation. This can also be used to add
+the schedule to the schedule library that is loaded up upon the start
+of Honeybee by copying this text into the honeybee/library/schedules/
+user_library.idf file.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">f03c8cdc-5f63-4a84-830a-1676cdbfece0</item>
+                <item name="Name" type_name="gh_string" type_code="10">idf_text</item>
+                <item name="NickName" type_name="gh_string" type_code="10">idf_text</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">false</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>710</X>
+                      <Y>238</Y>
+                      <W>60</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>739</X>
+                      <Y>248</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+          </chunks>
+        </chunk>
+      </chunks>
+    </chunk>
+  </chunks>
+</chunk>

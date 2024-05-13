@@ -1,0 +1,559 @@
+<chunk name="Object" index="0">
+  <items count="3">
+    <item name="GUID" type_name="gh_guid" type_code="9">410755b1-224a-4c1e-a407-bf32fb45ea7e</item>
+    <item name="Lib" type_name="gh_guid" type_code="9">00000000-0000-0000-0000-000000000000</item>
+    <item name="Name" type_name="gh_string" type_code="10">HB Seasonal Schedule</item>
+  </items>
+  <chunks count="1">
+    <chunk name="Container">
+      <items count="13">
+        <item name="CodeInput" type_name="gh_string" type_code="10"># Honeybee: A Plugin for Environmental Analysis (GPL)
+# This file is part of Honeybee.
+#
+# Copyright (c) 2024, Ladybug Tools.
+# You should have received a copy of the GNU Affero General Public License
+# along with Honeybee; If not, see &lt;http://www.gnu.org/licenses/&gt;.
+# 
+# @license AGPL-3.0-or-later &lt;https://spdx.org/licenses/AGPL-3.0-or-later&gt;
+
+
+"""
+Create a schedule using from other ScheduleRulesets and AnalysisPeriods over which
+each schedule should be applied.
+-
+
+    Args:
+        _base_schedule: A ScheduleRuleset that represents the base schedule on
+            top of which the other _season_scheds will be applied. This can also
+            be text to look up a ScheduleRuleset in the schedule library. Any time
+            period that is not covered by the input _analysis_periods will default
+            to this schedule. Furthermore, the summer and winter design day schedules
+            will be taken from this schedule as well as the ScheduleTypeLimits.
+        _season_scheds: A list of ScheduleRulesets that align with the _analysis_periods
+            below and represent the schedules that will be applied over the
+            _base_schedule for the duration of the respective AnalysisPeriod.
+            This can also be text to look up ScheduleRulesets in the schedule
+            library.
+        _analysis_periods: A list of AnalysusPeriod objects that align with the
+            _season_scheds and represent the time periods over which each season
+            schedule should be applied. Note that, if these AnalysisPeriods
+            overlap with one another, then the schedules that come later in
+            this list will overwrite those that come earlier in the list for
+            the duration of the overlapping time period.
+        _summer_des_: An optional list of 24 values that represent the schedule
+            values at each hour of the summer design day. This can also be a
+            single constant value for the whole day. If None, the summer
+            design day schedule of the _base_schedule will be used.
+        _winter_des_: An optional list of 24 values that represent the schedule
+            values at each hour of the summer design day. This can also be a
+            single constant value for the whole day. If None, the summer
+            design day schedule of the _base_schedule will be used.
+        _name_: Text to set the name for the Schedule and to be incorporated
+            into a unique Schedule identifier.
+
+    Returns:
+        report: Reports, errors, warnings, etc.
+        schedule: A ScheduleRuleset object that can be assigned to a Room, a Load
+            object, or a ProgramType object.
+        idf_year: Text string for the EnergyPlus ScheduleYear that will ultimately
+            be written into the IDF for simulation. This can also be used to add
+            the schedule to the schedule library that is loaded up upon the start
+            of Honeybee by copying this text into the honeybee/library/schedules/
+            user_library.idf file along with the other idf text outputs.
+        idf_week: Text string for the EnergyPlus ScheduleWeek that will ultimately
+            be written into the IDF for simulation. This can also be used to add
+            the schedule to the schedule library that is loaded up upon the start
+            of Honeybee by copying this text into the honeybee/library/schedules/
+            user_library.idf file along with the other idf text outputs.
+        idf_days: Text strings for the EnergyPlus SchedulDays that will ultimately
+            be written into the IDF for simulation. This can also be used to add
+            the schedule to the schedule library that is loaded up upon the start
+            of Honeybee by copying this text into the honeybee/library/schedules/
+            user_library.idf file along with the other idf text outputs.
+"""
+
+ghenv.Component.Name = "HB Seasonal Schedule"
+ghenv.Component.NickName = 'SeasonalSchedule'
+ghenv.Component.Message = '1.8.0'
+ghenv.Component.Category = 'HB-Energy'
+ghenv.Component.SubCategory = '2 :: Schedules'
+ghenv.Component.AdditionalHelpFromDocStrings = "4"
+
+try:  # import the core honeybee dependencies
+    from ladybug.dt import Date
+except ImportError as e:
+    raise ImportError('\nFailed to import honeybee:\n\t{}'.format(e))
+
+try:  # import the core honeybee dependencies
+    from honeybee.typing import clean_and_id_ep_string, clean_ep_string
+except ImportError as e:
+    raise ImportError('\nFailed to import honeybee:\n\t{}'.format(e))
+
+try:  # import the honeybee-energy dependencies
+    from honeybee_energy.schedule.day import ScheduleDay
+    from honeybee_energy.schedule.ruleset import ScheduleRuleset
+    from honeybee_energy.lib.schedules import schedule_by_identifier
+except ImportError as e:
+    raise ImportError('\nFailed to import honeybee_energy:\n\t{}'.format(e))
+
+try:  # import ladybug_rhino dependencies
+    from ladybug_rhino.grasshopper import all_required_inputs
+except ImportError as e:
+    raise ImportError('\nFailed to import ladybug_rhino:\n\t{}'.format(e))
+
+
+if all_required_inputs(ghenv.Component):
+    # check that the input _season_scheds align with the _analysis_periods
+    assert len(_season_scheds) == len(_analysis_periods), \
+        'Length of the _season_scheds list must match that of the _analysis_periods.' \
+        '\n{} does not equal {}'.format(len(_season_scheds), len(_analysis_periods))
+
+    # start by duplicating the base schedule
+    name = clean_and_id_ep_string('SeasonalSchedule') if _name_ is None else \
+        clean_ep_string(_name_)
+    if isinstance(_base_schedule, str):
+        _base_schedule = schedule_by_identifier(_base_schedule)
+    schedule = _base_schedule.duplicate()
+    schedule.identifier = name
+    if _name_ is not None:
+        schedule.display_name = _name_
+
+    # translate the _season_scheds to individual Rules and apply them to the base
+    for season_sch, a_period in zip(_season_scheds, _analysis_periods):
+        if isinstance(season_sch, str):
+            season_sch = schedule_by_identifier(season_sch)
+        if a_period.is_reversed:
+            season_rules = season_sch.to_rules(Date(1, 1), a_period.end_time.date) + \
+                season_sch.to_rules(a_period.st_time.date, Date(12, 31))
+        else:
+            season_rules = season_sch.to_rules(
+                a_period.st_time.date, a_period.end_time.date)
+        for rule in reversed(season_rules):  # preserve priority order of rules
+            schedule.add_rule(rule)
+
+    # apply the summer and winter design days if specified
+    if len(_summer_des_) != 0:
+        s_vals = [_summer_des_[0]] * 24 if len(_summer_des_) == 1 else _summer_des_
+        s_id = '{}_SmrDsn'.format(schedule.identifier)
+        s_day = ScheduleDay.from_values_at_timestep(s_id, s_vals)
+        schedule.summer_designday_schedule = s_day
+    if len(_winter_des_) != 0:
+        w_vals = [_winter_des_[0]] * 24 if len(_winter_des_) == 1 else _winter_des_
+        w_id = '{}_WntrDsn'.format(schedule.identifier)
+        w_day = ScheduleDay.from_values_at_timestep(w_id, w_vals)
+        schedule.winter_designday_schedule = w_day
+
+    # get the idf strings of the schedule
+    idf_year, idf_week = schedule.to_idf()
+    idf_days = [day_sch.to_idf(schedule.schedule_type_limit)
+                for day_sch in schedule.day_schedules]
+</item>
+        <item name="Description" type_name="gh_string" type_code="10">Create a schedule using from other ScheduleRulesets and AnalysisPeriods over which
+each schedule should be applied.
+-</item>
+        <item name="EditorLocation" type_name="gh_drawing_point" type_code="30">
+          <X>-828</X>
+          <Y>32</Y>
+        </item>
+        <item name="EditorSize" type_name="gh_drawing_size" type_code="32">
+          <W>816</W>
+          <H>1220</H>
+        </item>
+        <item name="HideInput" type_name="gh_bool" type_code="1">true</item>
+        <item name="HideOutput" type_name="gh_bool" type_code="1">false</item>
+        <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
+          <bitmap length="1187">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAOwAAADsABataJCQAABEVJREFUSEvFlXtMW3UUx6+h3boGIQgV+2I8WstITacwgltgBoNOJ5igJhI3TQEFt2hkMwv8o2ZJMTUx0YCSOR9LlAnJHmSIoMmihonbstKWFtoVlAJ90FYpUDbaTu7xnNK4Ai2LMdFv8sn93e/vnN+59/zug/lfBAC8vr6+0/39/adwvCVqx1UoFFL29vZe1Ov16qh1Z7EsK62srITq6mcAx/dG7bhyuVxHlUoltLW1/RK17iiBRqN5try8HPbtewJaWlqq0StORFdXV1tOTg4cP67R8/n8QvTSkIQ6hvyxe/ceKCsrg4qKx6CkpATQS0htbS1IJBI4dOgw8Hg88maRBmSDnkMiSUVFRVBfXw8NDY2gUqnWLLieuro6qKqqgubmZuByubFz5cgaDSCRSQ6HAwcOHISamhpISkqKTdqAQCCApqYmKCwsXD/3FbJGQ8j6oH/DN8gaUYEbiGMTphA7Mo5cRyYQ8iej57boeRDZUMCKfIFsi0NEQobhv8IwqZ9cuXL/WZZVfd7ZKUd7m1arFQ0MDKi6u7sfEAqFfPT6kEuUEyu6ghOrw7VipQrRilT+WVAitwdE231zu4oDnvb2kNlup31jrOO/HvF4PCGdzroYfTG7kZ9pLlZU4OTq8LY8goLkOUmeFbbnw+/ivOteSe7lgFQOkCEFe33jTxSjN42+EwzdgvGJ33B9SEYrYYFPV4e3NSfMKYUsBfiksm+jFuOu2P/8Db5k0Z+SMYS7eZfObJY5HLNVIyMj+7FAEob0IHELvI+fhl2TMzODY2O2Qf3ycva8JE/my8xml7MU2Jo97/lTBTuNJvOHTtu4y/Td9+epgMFkqna5PD1648gZLMDDdc4icQu8iwWqWIwKLN0Ew6jtwR+wGZ5WLYBMCSCWAyuWQaC4FBY1WjAOGy9SotE02kq9cbo8dNi0RR9ggR326emOMau1w6LTid4G4AytrLSPf3n6Y2+BqmMuM/vSEjfN8yc/Hbw7HjKaCwq2GAymx51OTwce2zB/K65zDolboB0DRJPTDrXFYlPj1SfPc1KKWYZ51ddzofECQBYFWs+ce8v78N7wzQwJzKcIZFcXFhQOt1uNBV7EO+BgSMI9oBY9Fbq1AnP+BfiRZeWLzNaX4R4JwBvHYNhuf5MCjdf0V4OPPglL6egzTMaw091MbbVPOTZtEb2V1MtHpmYc/jGLxX/N58u3qdUCZ35JGDKzwZel8PrEeYMzciULuBde5c7LlGgYtbzudLn9Op15FvPpRfsaiczFyoycpwHeRQpBY1LwhVpFWJR7MiTMnljKlPvD9+UaQ2K5lm1tTad5XJSLpGLO3ZEEhqGfT+QBiNVRhD5STyP0LJPorfz7l7mXYXgn0tJScchddSKiTaW+k8h/CaF1DpIRK1q0E6HJEEIfvvUsIvNIIMaLJYxQ/kdIQpUiryFHkKZ/AMUfRuhX+l+JYf4C2wBqjrtZzcQAAAAASUVORK5CYII=</bitmap>
+        </item>
+        <item name="InputIsPath" type_name="gh_bool" type_code="1">false</item>
+        <item name="InstanceGuid" type_name="gh_guid" type_code="9">92e36a1c-6b11-4bd0-9799-70d7b70f6b62</item>
+        <item name="IsAdvancedMode" type_name="gh_bool" type_code="1">false</item>
+        <item name="MarshalOutGuids" type_name="gh_bool" type_code="1">true</item>
+        <item name="Name" type_name="gh_string" type_code="10">HB Seasonal Schedule</item>
+        <item name="NickName" type_name="gh_string" type_code="10">SeasonalSchedule</item>
+      </items>
+      <chunks count="2">
+        <chunk name="Attributes">
+          <items count="2">
+            <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+              <X>823</X>
+              <Y>196</Y>
+              <W>193</W>
+              <H>124</H>
+            </item>
+            <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+              <X>941</X>
+              <Y>258</Y>
+            </item>
+          </items>
+        </chunk>
+        <chunk name="ParameterData">
+          <items count="13">
+            <item name="InputCount" type_name="gh_int32" type_code="3">6</item>
+            <item name="InputId" index="0" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="1" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="2" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="3" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="4" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="5" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="OutputCount" type_name="gh_int32" type_code="3">5</item>
+            <item name="OutputId" index="0" type_name="gh_guid" type_code="9">3ede854e-c753-40eb-84cb-b48008f14fd4</item>
+            <item name="OutputId" index="1" type_name="gh_guid" type_code="9">8ec86459-bf01-4409-baee-174d0d2b13d0</item>
+            <item name="OutputId" index="2" type_name="gh_guid" type_code="9">8ec86459-bf01-4409-baee-174d0d2b13d0</item>
+            <item name="OutputId" index="3" type_name="gh_guid" type_code="9">8ec86459-bf01-4409-baee-174d0d2b13d0</item>
+            <item name="OutputId" index="4" type_name="gh_guid" type_code="9">8ec86459-bf01-4409-baee-174d0d2b13d0</item>
+          </items>
+          <chunks count="11">
+            <chunk name="InputParam" index="0">
+              <items count="10">
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">A ScheduleRuleset that represents the base schedule on
+top of which the other _season_scheds will be applied. This can also
+be text to look up a ScheduleRuleset in the schedule library. Any time
+period that is not covered by the input _analysis_periods will default
+to this schedule. Furthermore, the summer and winter design day schedules
+will be taken from this schedule as well as the ScheduleTypeLimits.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">7ea3a487-08e7-46fc-bd20-c8ba43900506</item>
+                <item name="Name" type_name="gh_string" type_code="10">_base_schedule</item>
+                <item name="NickName" type_name="gh_string" type_code="10">_base_schedule</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">0</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">35915213-5534-4277-81b8-1bdc9e7383d2</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>823</X>
+                      <Y>198</Y>
+                      <W>103</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>877</X>
+                      <Y>208</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="1">
+              <items count="11">
+                <item name="Access" type_name="gh_int32" type_code="3">1</item>
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">A list of ScheduleRulesets that align with the _analysis_periods
+below and represent the schedules that will be applied over the
+_base_schedule for the duration of the respective AnalysisPeriod.
+This can also be text to look up ScheduleRulesets in the schedule
+library.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">3a568b5d-d946-4498-a493-9d0e134338cf</item>
+                <item name="Name" type_name="gh_string" type_code="10">_season_scheds</item>
+                <item name="NickName" type_name="gh_string" type_code="10">_season_scheds</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">1</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">35915213-5534-4277-81b8-1bdc9e7383d2</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>823</X>
+                      <Y>218</Y>
+                      <W>103</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>877</X>
+                      <Y>228</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="2">
+              <items count="11">
+                <item name="Access" type_name="gh_int32" type_code="3">1</item>
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">A list of AnalysusPeriod objects that align with the
+_season_scheds and represent the time periods over which each season
+schedule should be applied. Note that, if these AnalysisPeriods
+overlap with one another, then the schedules that come later in
+this list will overwrite those that come earlier in the list for
+the duration of the overlapping time period.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">c1b19e07-a31f-4c67-a372-ebf709304b81</item>
+                <item name="Name" type_name="gh_string" type_code="10">_analysis_periods</item>
+                <item name="NickName" type_name="gh_string" type_code="10">_analysis_periods</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">1</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">35915213-5534-4277-81b8-1bdc9e7383d2</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>823</X>
+                      <Y>238</Y>
+                      <W>103</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>877</X>
+                      <Y>248</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="3">
+              <items count="11">
+                <item name="Access" type_name="gh_int32" type_code="3">1</item>
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">An optional list of 24 values that represent the schedule
+values at each hour of the summer design day. This can also be a
+single constant value for the whole day. If None, the summer
+design day schedule of the _base_schedule will be used.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">c2858735-1269-46ff-a327-aa463397305e</item>
+                <item name="Name" type_name="gh_string" type_code="10">_summer_des_</item>
+                <item name="NickName" type_name="gh_string" type_code="10">_summer_des_</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">1</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">39fbc626-7a01-46ab-a18e-ec1c0c41685b</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>823</X>
+                      <Y>258</Y>
+                      <W>103</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>877</X>
+                      <Y>268</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="4">
+              <items count="11">
+                <item name="Access" type_name="gh_int32" type_code="3">1</item>
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">An optional list of 24 values that represent the schedule
+values at each hour of the summer design day. This can also be a
+single constant value for the whole day. If None, the summer
+design day schedule of the _base_schedule will be used.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">809e2136-3600-4333-a48a-627e9310723c</item>
+                <item name="Name" type_name="gh_string" type_code="10">_winter_des_</item>
+                <item name="NickName" type_name="gh_string" type_code="10">_winter_des_</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">1</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">39fbc626-7a01-46ab-a18e-ec1c0c41685b</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>823</X>
+                      <Y>278</Y>
+                      <W>103</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>877</X>
+                      <Y>288</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="5">
+              <items count="10">
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">Text to set the name for the Schedule and to be incorporated
+into a unique Schedule identifier.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">83c11a32-f50a-4898-adae-7ad64886e0d1</item>
+                <item name="Name" type_name="gh_string" type_code="10">_name_</item>
+                <item name="NickName" type_name="gh_string" type_code="10">_name_</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">0</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">37261734-eec7-4f50-b6a8-b8d1f3c4396b</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>823</X>
+                      <Y>298</Y>
+                      <W>103</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>877</X>
+                      <Y>308</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="OutputParam" index="0">
+              <items count="6">
+                <item name="Description" type_name="gh_string" type_code="10">Reports, errors, warnings, etc.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">d625d63e-0d60-4703-9e66-234d646cfd35</item>
+                <item name="Name" type_name="gh_string" type_code="10">out</item>
+                <item name="NickName" type_name="gh_string" type_code="10">out</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">false</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>956</X>
+                      <Y>198</Y>
+                      <W>60</W>
+                      <H>24</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>985</X>
+                      <Y>210</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="OutputParam" index="1">
+              <items count="6">
+                <item name="Description" type_name="gh_string" type_code="10">A ScheduleRuleset object that can be assigned to a Room, a Load
+object, or a ProgramType object.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">1934295b-719f-4110-8c6e-0fee06310707</item>
+                <item name="Name" type_name="gh_string" type_code="10">schedule</item>
+                <item name="NickName" type_name="gh_string" type_code="10">schedule</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">false</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>956</X>
+                      <Y>222</Y>
+                      <W>60</W>
+                      <H>24</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>985</X>
+                      <Y>234</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="OutputParam" index="2">
+              <items count="6">
+                <item name="Description" type_name="gh_string" type_code="10">Text string for the EnergyPlus ScheduleYear that will ultimately
+be written into the IDF for simulation. This can also be used to add
+the schedule to the schedule library that is loaded up upon the start
+of Honeybee by copying this text into the honeybee/library/schedules/
+user_library.idf file along with the other idf text outputs.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">7cc22935-e155-45c9-9749-d6740e0ad566</item>
+                <item name="Name" type_name="gh_string" type_code="10">idf_year</item>
+                <item name="NickName" type_name="gh_string" type_code="10">idf_year</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">false</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>956</X>
+                      <Y>246</Y>
+                      <W>60</W>
+                      <H>24</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>985</X>
+                      <Y>258</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="OutputParam" index="3">
+              <items count="6">
+                <item name="Description" type_name="gh_string" type_code="10">Text string for the EnergyPlus ScheduleWeek that will ultimately
+be written into the IDF for simulation. This can also be used to add
+the schedule to the schedule library that is loaded up upon the start
+of Honeybee by copying this text into the honeybee/library/schedules/
+user_library.idf file along with the other idf text outputs.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">1fdd90f9-284a-4197-be51-3e42878a8735</item>
+                <item name="Name" type_name="gh_string" type_code="10">idf_week</item>
+                <item name="NickName" type_name="gh_string" type_code="10">idf_week</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">false</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>956</X>
+                      <Y>270</Y>
+                      <W>60</W>
+                      <H>24</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>985</X>
+                      <Y>282</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="OutputParam" index="4">
+              <items count="6">
+                <item name="Description" type_name="gh_string" type_code="10">Text strings for the EnergyPlus SchedulDays that will ultimately
+be written into the IDF for simulation. This can also be used to add
+the schedule to the schedule library that is loaded up upon the start
+of Honeybee by copying this text into the honeybee/library/schedules/
+user_library.idf file along with the other idf text outputs.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">27f1de7b-5640-4b82-a41e-f2907c8fe87f</item>
+                <item name="Name" type_name="gh_string" type_code="10">idf_days</item>
+                <item name="NickName" type_name="gh_string" type_code="10">idf_days</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">false</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>956</X>
+                      <Y>294</Y>
+                      <W>60</W>
+                      <H>24</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>985</X>
+                      <Y>306</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+          </chunks>
+        </chunk>
+      </chunks>
+    </chunk>
+  </chunks>
+</chunk>

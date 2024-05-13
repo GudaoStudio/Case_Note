@@ -1,0 +1,231 @@
+<chunk name="Object" index="0">
+  <items count="3">
+    <item name="GUID" type_name="gh_guid" type_code="9">410755b1-224a-4c1e-a407-bf32fb45ea7e</item>
+    <item name="Lib" type_name="gh_guid" type_code="9">00000000-0000-0000-0000-000000000000</item>
+    <item name="Name" type_name="gh_string" type_code="10">HB Opaque Construction</item>
+  </items>
+  <chunks count="1">
+    <chunk name="Container">
+      <items count="13">
+        <item name="CodeInput" type_name="gh_string" type_code="10"># Honeybee: A Plugin for Environmental Analysis (GPL)
+# This file is part of Honeybee.
+#
+# Copyright (c) 2024, Ladybug Tools.
+# You should have received a copy of the GNU Affero General Public License
+# along with Honeybee; If not, see &lt;http://www.gnu.org/licenses/&gt;.
+# 
+# @license AGPL-3.0-or-later &lt;https://spdx.org/licenses/AGPL-3.0-or-later&gt;
+
+"""
+Create an EnergyPlus opaque construction. Material inputs can be either the
+identifiers of materials within the library or a custom material made with any
+of the EnergyPlus Material components.
+_
+Note that the _materials should be ordered from outermost (exterior) layer to the
+innermost (interior) layer.
+-
+
+    Args:
+        _name_: Text to set the name for the Construction and to be incorporated
+            into a unique Construction identifier.
+        _materials: List of materials in the construction (from exterior to interior).
+            These materials can be either fully-detailed material objects built
+            with the material components or text for a material identifier to be
+            looked up in the opaque material library.  Note that a native Grasshopper
+            "Merge" component can be used to help order the materials correctly
+            for the input here.
+
+    Returns:
+        constr: An opaque construction that can be assigned to Honeybee
+            Faces or ConstructionSets.
+"""
+
+ghenv.Component.Name = "HB Opaque Construction"
+ghenv.Component.NickName = 'OpaqueConstr'
+ghenv.Component.Message = '1.8.0'
+ghenv.Component.Category = 'HB-Energy'
+ghenv.Component.SubCategory = "1 :: Constructions"
+ghenv.Component.AdditionalHelpFromDocStrings = "4"
+
+try:  # import the core honeybee dependencies
+    from honeybee.typing import clean_and_id_ep_string, clean_ep_string
+except ImportError as e:
+    raise ImportError('\nFailed to import honeybee:\n\t{}'.format(e))
+
+try:  # import the honeybee-energy dependencies
+    from honeybee_energy.construction.opaque import OpaqueConstruction
+    from honeybee_energy.lib.materials import opaque_material_by_identifier
+except ImportError as e:
+    raise ImportError('\nFailed to import honeybee_energy:\n\t{}'.format(e))
+
+try:  # import ladybug_rhino dependencies
+    from ladybug_rhino.grasshopper import all_required_inputs
+except ImportError as e:
+    raise ImportError('\nFailed to import ladybug_rhino:\n\t{}'.format(e))
+
+
+if all_required_inputs(ghenv.Component):
+    name = clean_and_id_ep_string('OpaqueConstruction') if _name_ is None else \
+        clean_ep_string(_name_)
+
+    material_objs = []
+    for material in _materials:
+        if isinstance(material, str):
+            material = opaque_material_by_identifier(material)
+        material_objs.append(material)
+
+    constr = OpaqueConstruction(name, material_objs)
+    if _name_ is not None:
+        constr.display_name = _name_
+</item>
+        <item name="Description" type_name="gh_string" type_code="10">Create an EnergyPlus opaque construction. Material inputs can be either the
+identifiers of materials within the library or a custom material made with any
+of the EnergyPlus Material components.
+_
+Note that the _materials should be ordered from outermost (exterior) layer to the
+innermost (interior) layer.
+-</item>
+        <item name="EditorLocation" type_name="gh_drawing_point" type_code="30">
+          <X>35</X>
+          <Y>88</Y>
+        </item>
+        <item name="EditorSize" type_name="gh_drawing_size" type_code="32">
+          <W>1504</W>
+          <H>1768</H>
+        </item>
+        <item name="HideInput" type_name="gh_bool" type_code="1">true</item>
+        <item name="HideOutput" type_name="gh_bool" type_code="1">true</item>
+        <item name="IconOverride" type_name="gh_drawing_bitmap" type_code="37">
+          <bitmap length="1004">iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAOvwAADr8BOAVTJAAAA45JREFUSEvtlXtMjXEYx5vjHHWOOnM42Fhq5DJy+wNTcSjS1Ilyt5P7hizGpAsJiS6kDkpUolxitbnfM5diY5YWuW3mVsxs6UrnvF/P+76/WW9+ZvOHv3y2Z+/Zb+/5Pr/f832e3+vwn7/B5KJTz6dnBMVqijBHdYcwR612Af1eyNYidDrdbHouoVjB1pZrHdUWeo6j+D1dXToW397tgztpPihN8cLjHF9sntMLq9ZEoqKiAmVlZSgvL8fDiicInTQCN5NHoTTVC/et43E1yQtOGtVhJsWnh75T4efTAcCtEOD6NODeTBwMd0d8QgraYqMInzcBuOQP3KD3boXi/XF/6DurrUyKj+/I7klfSqbi24UgNJ4NhHAtGEdiPYV0635BlpZpaRWQnbAYDcUT0HQuEN8vmvGJNmYaZtzApPi49XTK+XBiClovmaUEKJ2OzBXu2Jq4i0nLfG2yYekMb9SX+EkJ7JeD8eKwH5y16r1Mio9Rryl8W+gPW5sEGcv6IDpuO5OWqWu0Icw8RpHgWZ4vHDWqTCbFZ6Crc1ZtUQBa6chSiciHzLUDhPhtOxUlavpmR8KaEEowUUognvgdeTCwj/M2JsWH50FO1GAhJ++onWlLiAmS1s9CQ5sE76m0nu76eCbFx6DXHHtbOFlRovSlrojamMCkZcQSWcyjlSXKlUqUxaT4dJM8UCawih5sUnogmrwoZKwiwfM8P9Cw7WNSfEzDuye3L1F+7BAhLWPfL21qjbNQm8olEtv046kAjBlkiGFSfPr31mXXnqQ2ZSbjxnQcCO+LxOQ9TFqmvtmGlXNNihO8yp+ELi6d0pkUH2MXTUH7NhVLFBOXyKRl6qhEC4KVbfqc2lT7pzZ166k7pBg0ugZyI/ohMWk3k5ZpbLFj48ogSuArJRA39Ia8o//vYFJ8eG2aGz2YPFBeFc3fBaTFzPvpgVjSmqIpGNnfsIlJ8eFOMrUpb5ItQX/RpuIciEdtn+CXOSAPwtp5IF4Vf/TANKxbSvMFs3RVC1eCgbuhOLHZUzhScFwxySIH6Ta1n/eDcJnep43UnwmEz1BjNJPiM6B35/w7e8bhdcFkPKWPTRXtarvFDVGx8aiurkZNTQ2qqqrw4FElFoV6ozLLCy+pPSuzJ9IHZywMzpoDTOq3iJ/CVNce2kiDi0Y0LJVilxgqlWqnh4fHOrYmhc5JvcXVqI1ss2am+Fc4OPwAOK5lZjypqrwAAAAASUVORK5CYII=</bitmap>
+        </item>
+        <item name="InputIsPath" type_name="gh_bool" type_code="1">false</item>
+        <item name="InstanceGuid" type_name="gh_guid" type_code="9">46d01afe-2e4b-46c1-9e2a-b7f8e5315a5f</item>
+        <item name="IsAdvancedMode" type_name="gh_bool" type_code="1">false</item>
+        <item name="MarshalOutGuids" type_name="gh_bool" type_code="1">true</item>
+        <item name="Name" type_name="gh_string" type_code="10">HB Opaque Construction</item>
+        <item name="NickName" type_name="gh_string" type_code="10">OpaqueConstr</item>
+      </items>
+      <chunks count="2">
+        <chunk name="Attributes">
+          <items count="2">
+            <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+              <X>395</X>
+              <Y>196</Y>
+              <W>141</W>
+              <H>44</H>
+            </item>
+            <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+              <X>474</X>
+              <Y>218</Y>
+            </item>
+          </items>
+        </chunk>
+        <chunk name="ParameterData">
+          <items count="5">
+            <item name="InputCount" type_name="gh_int32" type_code="3">2</item>
+            <item name="InputId" index="0" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="InputId" index="1" type_name="gh_guid" type_code="9">84fa917c-1ed8-4db3-8be1-7bdc4a6495a2</item>
+            <item name="OutputCount" type_name="gh_int32" type_code="3">1</item>
+            <item name="OutputId" index="0" type_name="gh_guid" type_code="9">8ec86459-bf01-4409-baee-174d0d2b13d0</item>
+          </items>
+          <chunks count="3">
+            <chunk name="InputParam" index="0">
+              <items count="10">
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">Text to set the name for the Construction and to be incorporated
+into a unique Construction identifier.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">34a04529-9cfd-4346-b0f5-181e79c165cc</item>
+                <item name="Name" type_name="gh_string" type_code="10">_name_</item>
+                <item name="NickName" type_name="gh_string" type_code="10">_name_</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">0</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">37261734-eec7-4f50-b6a8-b8d1f3c4396b</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>395</X>
+                      <Y>198</Y>
+                      <W>64</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>429.5</X>
+                      <Y>208</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="InputParam" index="1">
+              <items count="11">
+                <item name="Access" type_name="gh_int32" type_code="3">1</item>
+                <item name="AllowTreeAccess" type_name="gh_bool" type_code="1">true</item>
+                <item name="Description" type_name="gh_string" type_code="10">List of materials in the construction (from exterior to interior).
+These materials can be either fully-detailed material objects built
+with the material components or text for a material identifier to be
+looked up in the opaque material library.  Note that a native Grasshopper
+"Merge" component can be used to help order the materials correctly
+for the input here.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">d6ad97e5-3670-4364-9daf-46fdaf534eeb</item>
+                <item name="Name" type_name="gh_string" type_code="10">_materials</item>
+                <item name="NickName" type_name="gh_string" type_code="10">_materials</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">true</item>
+                <item name="ScriptParamAccess" type_name="gh_int32" type_code="3">1</item>
+                <item name="ShowTypeHints" type_name="gh_bool" type_code="1">true</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+                <item name="TypeHintID" type_name="gh_guid" type_code="9">35915213-5534-4277-81b8-1bdc9e7383d2</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>395</X>
+                      <Y>218</Y>
+                      <W>64</W>
+                      <H>20</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>429.5</X>
+                      <Y>228</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="OutputParam" index="0">
+              <items count="6">
+                <item name="Description" type_name="gh_string" type_code="10">An opaque construction that can be assigned to Honeybee
+Faces or ConstructionSets.</item>
+                <item name="InstanceGuid" type_name="gh_guid" type_code="9">169ba7d2-b791-41d0-9356-03c9e724e370</item>
+                <item name="Name" type_name="gh_string" type_code="10">constr</item>
+                <item name="NickName" type_name="gh_string" type_code="10">constr</item>
+                <item name="Optional" type_name="gh_bool" type_code="1">false</item>
+                <item name="SourceCount" type_name="gh_int32" type_code="3">0</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Attributes">
+                  <items count="2">
+                    <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                      <X>489</X>
+                      <Y>198</Y>
+                      <W>47</W>
+                      <H>40</H>
+                    </item>
+                    <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                      <X>511.5</X>
+                      <Y>218</Y>
+                    </item>
+                  </items>
+                </chunk>
+              </chunks>
+            </chunk>
+          </chunks>
+        </chunk>
+      </chunks>
+    </chunk>
+  </chunks>
+</chunk>
